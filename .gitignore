@@ -1,3 +1,7 @@
 .DS_Store
 *.pyc
 *.pkl
+data/
+*.log
+.ipynb_checkpoints
+cycle_removal

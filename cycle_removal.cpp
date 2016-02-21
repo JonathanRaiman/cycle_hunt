@@ -44,30 +44,81 @@ bool is_in(const int& key, const std::unordered_map<int, T>& map) {
     return map.find(key) != map.end();
 }
 
+bool is_in(const int& key, const std::unordered_set<int>& map) {
+    return map.find(key) != map.end();
+}
+
+template<typename T>
+void remove_elements(std::vector<T>& v, const T& key) {
+    v.erase( std::remove( v.begin(), v.end(), key ), v.end() );
+}
+
 class Graph {
 
     public:
-        std::unordered_map<int, std::vector<int>> connections;
+        typedef int node_t;
+
+        typedef std::tuple<std::vector<node_t>, std::vector<node_t>> connections_data_t;
+
+        typedef std::unordered_map<node_t, connections_data_t> connections_t;
+
+        connections_t connections;
 
         Graph() {};
 
-        void add_node(int node) {
+        Graph(connections_t&& _connections) : connections(_connections) {};
+
+        void add_node(node_t node) {
             if (!is_in(node, connections)) {
-                connections[node] = {};
+                connections[node] = connections_data_t();
             }
         }
 
-        void add_edge(int from, int to) {
+        void add_edge(node_t from, node_t to) {
             add_node(from);
             add_node(to);
-            connections[from].push_back(to);
+            std::get<0>(connections[from]).push_back(to);
+            std::get<1>(connections[to]).push_back(from);
         }
 
-        const std::vector<int>& neighbors(int node) const {
-            return connections.at(node);
+        const std::vector<node_t>& neighbors(node_t node) const {
+            return std::get<0>(connections.at(node));
         }
 
+        Graph copy_edges() const {
+            connections_t nonempty_connections;
+            for (auto& node : connections) {
+                if (std::get<0>(node.second).size() > 0  || std::get<1>(node.second).size() > 0) {
+                    nonempty_connections[node.first] = node.second;
+                }
+            }
+            return Graph(std::move(nonempty_connections));
+        }
 
+        void remove_node(node_t node) {
+            if (is_in(node, connections)) {
+                auto& node_data = connections[node];
+
+                for (auto& other_node : std::get<0>(node_data)) {
+                    remove_elements(
+                        std::get<1>(connections[other_node]),
+                        node
+                    );
+                }
+
+                for (auto& other_node : std::get<1>(node_data)) {
+                    remove_elements(
+                        std::get<0>(connections[other_node]),
+                        node
+                    );
+                }
+
+            }
+        }
+
+        Graph subgraph(int_set_t& node_set) {
+            return Graph();
+        }
 };
 
 std::vector<int_set_t> strongly_connected_components(const Graph& G) {
@@ -135,6 +186,119 @@ std::vector<int_set_t> strongly_connected_components(const Graph& G) {
     return scc_components;
 }
 
+template<typename T>
+T&& set_pop(std::unordered_set<T>& set) {
+    auto node = (*set.begin());
+    set.erase(node);
+    return std::move(node);
+}
+
+std::vector<std::vector<int> > simple_cycles(const Graph& G) {
+
+    auto _unblock = [](const int& thisnode, int_set_t& blocked, std::unordered_map<int, int_set_t>& B) {
+        int_set_t stack = {thisnode};
+        while (!stack.empty()) {
+            // pop from stack
+            auto node = set_pop(stack);
+
+            if (is_in(node, blocked)) {
+                blocked.erase(node);
+                for (auto& v : B[node]) {
+                    stack.insert(v);
+                }
+                B[node].clear();
+            }
+
+        }
+    };
+
+    Graph subG = G.copy_edges();
+
+    auto sccs = strongly_connected_components(subG);
+
+    int thisnode;
+    std::vector<int> nbrs;
+
+    std::vector<std::vector<int>> paths;
+
+    while (!sccs.empty()) {
+        auto scc = sccs.back();
+        sccs.pop_back();
+
+        auto startnode = set_pop(scc);
+
+        std::vector<int> path = {startnode};
+
+        int_set_t blocked;
+        int_set_t closed;
+
+        blocked.insert(startnode);
+
+        std::unordered_map<int, int_set_t> B;
+
+        std::vector<std::tuple<int, std::vector<int>> > stack;
+        stack.emplace_back(
+            startnode,
+            subG.neighbors(startnode)
+        );
+
+
+
+        while (!stack.empty()) {
+            std::tie(thisnode, nbrs) = stack.back();
+
+            if (!nbrs.empty()) {
+                auto nextnode = nbrs.back();
+                nbrs.pop_back();
+
+                if (nextnode == startnode) {
+                    paths.emplace_back(path);
+
+                    for (auto& v : path) {
+                        closed.insert(v);
+                    }
+                } else if (!is_in(nextnode, blocked)) {
+                    path.push_back(nextnode);
+                    stack.emplace_back(
+                        nextnode,
+                        subG.neighbors(nextnode)
+                    );
+                    closed.erase(nextnode);
+                    blocked.insert(nextnode);
+                    continue;
+                }
+            }
+
+            if (nbrs.empty()) {
+                if (is_in(thisnode, closed)) {
+                    _unblock(thisnode, blocked, B);
+                } else {
+                    for (auto& nbr : subG.neighbors(thisnode)) {
+                        if (!is_in(thisnode, B[nbr])) {
+                            B[nbr].insert(thisnode);
+                        }
+                    }
+                }
+                stack.pop_back();
+
+                path.pop_back();
+            }
+        }
+
+        subG.remove_node(startnode);
+
+        auto H = subG.subgraph(scc);
+
+        for (auto& h_scc : strongly_connected_components(H)) {
+            sccs.push_back(h_scc);
+        }
+
+
+    }
+
+    return paths;
+}
+
 int main() {
     auto G = Graph();
 
@@ -146,4 +310,5 @@ int main() {
     G.add_edge(3, 0);
 
     std::cout << strongly_connected_components(G) << std::endl;
+    std::cout << simple_cycles(G) << std::endl;
 }
