@@ -216,12 +216,15 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
 
     auto sccs = strongly_connected_components(subG);
 
-    int thisnode;
+
     std::vector<int> nbrs;
 
-    std::vector<std::vector<int>> paths;
+    int iters = 0;
 
+    std::vector<std::vector<int>> paths;
+    std::cout << "sccs begin" << std::endl;
     while (!sccs.empty()) {
+        std::cout << "sccs iter" << std::endl;
         auto scc = sccs.back();
         sccs.pop_back();
 
@@ -237,15 +240,21 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
         std::unordered_map<int, int_set_t> B;
 
         std::vector<std::tuple<int, std::vector<int>> > stack;
+
         stack.emplace_back(
             startnode,
             subG.neighbors(startnode)
         );
 
-
-
+        std::cout << "stack begin" << std::endl;
+        iters = 0;
         while (!stack.empty()) {
-            std::tie(thisnode, nbrs) = stack.back();
+            iters += 1;
+            std::cout << "    stack iter" << std::endl;
+
+            auto& stack_back = stack.back();
+            auto& nbrs = std::get<1>(stack_back);
+            const auto& thisnode = std::get<0>(stack_back);
 
             if (!nbrs.empty()) {
                 auto nextnode = nbrs.back();
@@ -270,6 +279,7 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
             }
 
             if (nbrs.empty()) {
+                std::cout << "nbrs empty (stack len = " <<  stack.size() << ")" << std::endl;
                 if (is_in(thisnode, closed)) {
                     _unblock(thisnode, blocked, B);
                 } else {
@@ -283,7 +293,12 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
 
                 path.pop_back();
             }
+            std::cout << "    stack len = " << stack.size() << std::endl;
+            if (iters > 10) {
+                return paths;
+            }
         }
+        std::cout << "stack end" << std::endl;
 
         subG.remove_node(startnode);
 
@@ -295,6 +310,7 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
 
 
     }
+    std::cout << "sccs end" << std::endl;
 
     return paths;
 }
