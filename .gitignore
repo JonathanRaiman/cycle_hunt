@@ -5,3 +5,4 @@ data/
 *.log
 .ipynb_checkpoints
 cycle_removal
+*.dSYM
