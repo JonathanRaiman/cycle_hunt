@@ -116,10 +116,33 @@ class Graph {
             }
         }
 
-        Graph subgraph(int_set_t& node_set) {
-            return Graph();
+        Graph subgraph(int_set_t& nbunch) const {
+            Graph H;
+            for (auto& n : nbunch) {
+                if (is_in(n, connections)) {
+                    H.connections[n] = connections.at(n);
+                }
+            }
+            return H;
+        }
+
+        size_t size() const {
+            return connections.size();
         }
 };
+
+std::ostream& operator<<(std::ostream& os, const Graph& G) {
+        if (G.size() == 0) return os << "Graph()";
+        os << "Graph(\n";
+        for (auto& n : G.connections) {
+                os << std::fixed
+                   << std::setw( 7 ) // keep 7 digits
+                   << std::setprecision( 3 ) // use 3 decimals
+                   << std::setfill( ' ' ) // pad values with blanks this->w(i,j)
+                   << n.first << " -> " << std::get<0>(n.second) << "\n";
+        }
+        return os << ")";
+}
 
 std::vector<int_set_t> strongly_connected_components(const Graph& G) {
     int_map_t preorder;
@@ -216,15 +239,8 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
 
     auto sccs = strongly_connected_components(subG);
 
-
-    std::vector<int> nbrs;
-
-    int iters = 0;
-
     std::vector<std::vector<int>> paths;
-    std::cout << "sccs begin" << std::endl;
     while (!sccs.empty()) {
-        std::cout << "sccs iter" << std::endl;
         auto scc = sccs.back();
         sccs.pop_back();
 
@@ -246,11 +262,7 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
             subG.neighbors(startnode)
         );
 
-        std::cout << "stack begin" << std::endl;
-        iters = 0;
         while (!stack.empty()) {
-            iters += 1;
-            std::cout << "    stack iter" << std::endl;
 
             auto& stack_back = stack.back();
             auto& nbrs = std::get<1>(stack_back);
@@ -262,7 +274,6 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
 
                 if (nextnode == startnode) {
                     paths.emplace_back(path);
-
                     for (auto& v : path) {
                         closed.insert(v);
                     }
@@ -279,7 +290,6 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
             }
 
             if (nbrs.empty()) {
-                std::cout << "nbrs empty (stack len = " <<  stack.size() << ")" << std::endl;
                 if (is_in(thisnode, closed)) {
                     _unblock(thisnode, blocked, B);
                 } else {
@@ -290,27 +300,16 @@ std::vector<std::vector<int> > simple_cycles(const Graph& G) {
                     }
                 }
                 stack.pop_back();
-
                 path.pop_back();
             }
-            std::cout << "    stack len = " << stack.size() << std::endl;
-            if (iters > 10) {
-                return paths;
-            }
         }
-        std::cout << "stack end" << std::endl;
 
         subG.remove_node(startnode);
-
         auto H = subG.subgraph(scc);
-
         for (auto& h_scc : strongly_connected_components(H)) {
             sccs.push_back(h_scc);
         }
-
-
     }
-    std::cout << "sccs end" << std::endl;
 
     return paths;
 }
@@ -325,6 +324,7 @@ int main() {
     G.add_edge(1, 3);
     G.add_edge(3, 0);
 
-    std::cout << strongly_connected_components(G) << std::endl;
-    std::cout << simple_cycles(G) << std::endl;
+    std::cout << G << std::endl;
+    std::cout << "strongly_connected_components => " << strongly_connected_components(G) << std::endl;
+    std::cout << "simple_cycles => " << simple_cycles(G) << std::endl;
 }
