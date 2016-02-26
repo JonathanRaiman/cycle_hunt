@@ -401,7 +401,8 @@ class Graph {
                 const Graph& G,
                 int max_cycles,
                 std::unordered_set<std::tuple<int, int>>& blacklist,
-                bool update_common_edges);
+                bool update_common_edges,
+                bool lazy);
 
         static Graph greedy_remove_cycles(
                 const Graph& G,
@@ -417,7 +418,8 @@ class Graph {
 
         SimpleCyclesResult simple_cycles(
                 int max_cycles,
-                const std::unordered_set<std::tuple<int, int>>& blacklist) const;
+                const std::unordered_set<std::tuple<int, int>>& blacklist,
+                bool lazy) const;
 
         void save_connection_matrix(const std::string& fname) const;
         static Graph load_connection_matrix(const std::string& fname);
@@ -433,9 +435,10 @@ Graph::RemoveCyclesResult Graph::greedy_remove_cycles_step(
         const Graph& G,
         int max_cycles,
         std::unordered_set<std::tuple<int, int>>& blacklist,
-        bool update_common_edges) {
+        bool update_common_edges,
+        bool lazy) {
 
-    auto simple_cycles_result = G.simple_cycles(max_cycles, blacklist);
+    auto simple_cycles_result = G.simple_cycles(max_cycles, blacklist, lazy);
 
     auto& cycles = simple_cycles_result.paths;
     auto& common_edges = simple_cycles_result.common_edges;
@@ -512,18 +515,25 @@ Graph Graph::greedy_remove_cycles(
 
     Graph G = original;
 
+    bool lazy = true;
+
     while (true) {
         auto res = greedy_remove_cycles_step(
             G,
             max_cycles,
             blacklist,
-            update_common_edges
+            update_common_edges,
+            lazy
         );
         G = std::move(res.G);
         std::cout << "res.removals.size() = " << res.removals.size() << std::endl;
         total_removals += res.removals.size();
         if (res.removals.size() == 0) {
-            break;
+            if (!lazy) {
+                break;
+            } else {
+                lazy = false;
+            }
         }
     }
     std::cout << "total removals size = " << total_removals << std::endl;
@@ -611,7 +621,8 @@ std::vector<int_set_t> Graph::strongly_connected_components() const {
 
 Graph::SimpleCyclesResult Graph::simple_cycles(
         int max_cycles,
-        const std::unordered_set<std::tuple<int, int>>& blacklist) const {
+        const std::unordered_set<std::tuple<int, int>>& blacklist,
+        bool lazy) const {
 
     auto _unblock = [](const int& thisnode, int_set_t& blocked, std::unordered_map<int, int_set_t>& B) {
         int_set_t stack = {thisnode};
@@ -641,96 +652,102 @@ Graph::SimpleCyclesResult Graph::simple_cycles(
     while (!sccs.empty()) {
         auto scc = sccs.back();
         sccs.pop_back();
-        auto startnode = set_pop(scc);
 
-        std::vector<int> path = {startnode};
+        if (scc.size() == 1 && lazy) {
+            auto startnode = set_pop(scc);
+            subG.remove_node(startnode);
+        } else {
+            auto startnode = set_pop(scc);
 
-        int_set_t blocked;
-        int_set_t closed;
+            std::vector<int> path = {startnode};
 
-        blocked.insert(startnode);
+            int_set_t blocked;
+            int_set_t closed;
 
-        std::unordered_map<int, int_set_t> B;
+            blocked.insert(startnode);
 
-        std::vector<std::tuple<int, std::vector<int>> > stack;
+            std::unordered_map<int, int_set_t> B;
 
-        stack.emplace_back(
-            startnode,
-            subG.neighbors(startnode)
-        );
+            std::vector<std::tuple<int, std::vector<int>> > stack;
 
-        while (!stack.empty()) {
+            stack.emplace_back(
+                startnode,
+                subG.neighbors(startnode)
+            );
 
-            auto& stack_back = stack.back();
-            auto& nbrs = std::get<1>(stack_back);
-            const auto& thisnode = std::get<0>(stack_back);
+            while (!stack.empty()) {
 
-            if (!nbrs.empty()) {
-                auto nextnode = nbrs.back();
-                nbrs.pop_back();
+                auto& stack_back = stack.back();
+                auto& nbrs = std::get<1>(stack_back);
+                const auto& thisnode = std::get<0>(stack_back);
 
-                if (nextnode == startnode) {
-                    paths.emplace_back(path);
+                if (!nbrs.empty()) {
+                    auto nextnode = nbrs.back();
+                    nbrs.pop_back();
 
-                    for (int i = 0; i < path.size(); i++) {
-                        std::tuple<int, int> edge(path[i], path[(i+1) % path.size()]);
+                    if (nextnode == startnode) {
+                        paths.emplace_back(path);
 
-                        if (is_in(edge, common_edges)) {
-                            common_edges[edge] += 1;
-                            max_edge = std::max(common_edges[edge], max_edge);
-                        } else {
-                            if (!is_in(edge, blacklist)) {
-                                common_edges[edge] = 1;
+                        for (int i = 0; i < path.size(); i++) {
+                            std::tuple<int, int> edge(path[i], path[(i+1) % path.size()]);
+
+                            if (is_in(edge, common_edges)) {
+                                common_edges[edge] += 1;
+                                max_edge = std::max(common_edges[edge], max_edge);
+                            } else {
+                                if (!is_in(edge, blacklist)) {
+                                    common_edges[edge] = 1;
+                                }
+                            }
+                        }
+
+                        if (paths.size() >= max_cycles) {
+                            std::cout << std::endl;
+                            return result;
+                        }
+
+                        if (paths.size() % 10 == 0) {
+                            std::cout << paths.size() << " paths found. "
+                                      << common_edges.size() << " common_edges. "
+                                      << max_edge << " max_edge\r" << std::flush;
+                        }
+
+                        for (auto& v : path) {
+                            closed.insert(v);
+                        }
+                    } else if (!is_in(nextnode, blocked)) {
+                        path.push_back(nextnode);
+                        stack.emplace_back(
+                            nextnode,
+                            subG.neighbors(nextnode)
+                        );
+                        closed.erase(nextnode);
+                        blocked.insert(nextnode);
+                        continue;
+                    }
+                }
+
+                if (nbrs.empty()) {
+                    if (is_in(thisnode, closed)) {
+                        _unblock(thisnode, blocked, B);
+                    } else {
+                        for (auto& nbr : subG.neighbors(thisnode)) {
+                            if (!is_in(thisnode, B[nbr])) {
+                                B[nbr].insert(thisnode);
                             }
                         }
                     }
-
-                    if (paths.size() >= max_cycles) {
-                        std::cout << std::endl;
-                        return result;
-                    }
-
-                    if (paths.size() % 10 == 0) {
-                        std::cout << paths.size() << " paths found. "
-                                  << common_edges.size() << " common_edges. "
-                                  << max_edge << " max_edge\r" << std::flush;
-                    }
-
-                    for (auto& v : path) {
-                        closed.insert(v);
-                    }
-                } else if (!is_in(nextnode, blocked)) {
-                    path.push_back(nextnode);
-                    stack.emplace_back(
-                        nextnode,
-                        subG.neighbors(nextnode)
-                    );
-                    closed.erase(nextnode);
-                    blocked.insert(nextnode);
-                    continue;
+                    stack.pop_back();
+                    path.pop_back();
                 }
             }
 
-            if (nbrs.empty()) {
-                if (is_in(thisnode, closed)) {
-                    _unblock(thisnode, blocked, B);
-                } else {
-                    for (auto& nbr : subG.neighbors(thisnode)) {
-                        if (!is_in(thisnode, B[nbr])) {
-                            B[nbr].insert(thisnode);
-                        }
-                    }
-                }
-                stack.pop_back();
-                path.pop_back();
+            subG.remove_node(startnode);
+
+            auto H = subG.subgraph(scc);
+            for (auto& h_scc : H.strongly_connected_components()) {
+                sccs.push_back(h_scc);
             }
-        }
-
-        subG.remove_node(startnode);
-
-        auto H = subG.subgraph(scc);
-        for (auto& h_scc : H.strongly_connected_components()) {
-            sccs.push_back(h_scc);
         }
     }
     std::cout << std::endl;
@@ -812,42 +829,36 @@ int main(int argc, char* argv[]) {
             auto G = Graph::load_connection_matrix(path);
             std::cout << "loaded graph with size " << G.size() << std::endl;
 
-            while (true) {
-                // iterate through nodes, ensuring their
-                // predecessors were visited beforehand. Stop
-                // when no new node can be visited due to
-                // inactive predecessors. Record those blocking
-                // nodes:
-                auto bnodes = G.reach_blocking_nodes();
-                std::cout << "bnodes.size() = " << bnodes.size() << std::endl;
+            // iterate through nodes, ensuring their
+            // predecessors were visited beforehand. Stop
+            // when no new node can be visited due to
+            // inactive predecessors. Record those blocking
+            // nodes:
+            auto bnodes = G.reach_blocking_nodes();
+            std::cout << "bnodes.size() = " << bnodes.size() << std::endl;
+            // Construct a graph made from those blocking nodes:
+            // that's where the cycles are hiding
+            auto blockingG = G.subgraph(bnodes);
 
-                if (bnodes.size() == 0) {
-                    break;
-                }
-                // Construct a graph made from those blocking nodes: that's
-                // where the cycles are hiding
-                auto blockingG = G.subgraph(bnodes);
+            // Now perform a greedy removal of cycles by
+            // find `max_cycles` and tallying up the
+            // edges used in all found cycles, and removing
+            // the most common edges until all cycles are
+            // gone. Process is repeated until no cycles
+            // can be found in the subgraph
+            auto unblockedG = Graph::greedy_remove_cycles(
+                blockingG,
+                max_cycles,
+                update_common_edges
+            );
 
-                // Now perform a greedy removal of cycles by
-                // find `max_cycles` and tallying up the
-                // edges used in all found cycles, and removing
-                // the most common edges until all cycles are
-                // gone. Process is repeated until no cycles
-                // can be found in the subgraph
-                auto unblockedG = Graph::greedy_remove_cycles(
-                    blockingG,
-                    max_cycles,
-                    update_common_edges
-                );
-
-                // The newly rewired subgraph can now be
-                // reinjected into the original graph. All
-                // connections that were not internal to the
-                // subgraph are kept, while all connections
-                // internal to the subgraph are replaced by
-                // the cycle-removed subgraph.
-                G.update_subgraph(unblockedG);
-            }
+            // The newly rewired subgraph can now be
+            // reinjected into the original graph. All
+            // connections that were not internal to the
+            // subgraph are kept, while all connections
+            // internal to the subgraph are replaced by
+            // the cycle-removed subgraph.
+            G.update_subgraph(unblockedG);
 
             std::cout << "G.number_of_edges() = " << G.number_of_edges() << std::endl;
 
