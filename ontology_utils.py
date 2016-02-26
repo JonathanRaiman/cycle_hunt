@@ -35,6 +35,8 @@ def load_roots_from_stream(fp, roots, total_size):
     marked_branch = None
     last_edge_is_right_arrow = True
 
+    last_print = None
+
     for k, line in enumerate(text_fin):
         tokens = line.split(right_arrow, 1)
         if len(tokens) >= 2:
@@ -52,10 +54,14 @@ def load_roots_from_stream(fp, roots, total_size):
                     add_lattice_edge(marked_branch, tokens[0].strip(), branch_map, parentless)
                 else:
                     add_lattice_edge(tokens[0].strip(), marked_branch, branch_map, parentless)
+
         if k % 2000 == 0:
-            progress = fp.tell() / total_size
-            print("█" * (int(20 * progress)) + " %.1f%%" % (100 * progress,))
-            clear_output(wait=True)
+            current_time = time.time()
+            if last_print is None or (current_time - last_print) > 0.1:
+                last_print = current_time
+                progress = fp.tell() / total_size
+                print("█" * (int(20 * progress)) + " %.1f%%" % (100 * progress,))
+                clear_output(wait=True)
 
     for k in parentless:
         if len(k.parents) == 0:
