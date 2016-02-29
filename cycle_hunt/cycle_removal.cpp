@@ -3,6 +3,8 @@
 #include <iostream>
 #include <sys/stat.h>
 
+using cycle_hunt::Graph;
+
 bool file_exists (const std::string& fname) {
     struct stat buffer;
     return (stat(fname.c_str(), &buffer) == 0);
