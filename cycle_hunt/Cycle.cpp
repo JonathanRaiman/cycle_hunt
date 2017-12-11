@@ -286,7 +286,7 @@ namespace cycle_hunt {
 
         std::cout << "found cycles " << cycles.size() << std::endl;
 
-        while (cycles.size() > 0) {
+        while (cycles.size() > 0 && common_edges.size() > 0) {
             auto G_copy = res.G.copy();
             auto edge_kv = std::max_element(
                 common_edges.begin(), common_edges.end(),
