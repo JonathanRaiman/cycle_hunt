@@ -673,12 +673,17 @@ namespace cycle_hunt {
 
         Graph G;
 
+        std::unordered_set<std::tuple<int32_t, int32_t>> visited;
+
         while (fp) {
             fp.read((char*)&from, sizeof(from));
             fp.read((char*)&to, sizeof(to));
-            G.add_edge(from, to);
+            auto insertable = std::tuple<int32_t, int32_t>(from, to);
+            if (visited.find(insertable) == visited.end()) {
+                G.add_edge(from, to);
+                visited.insert(insertable);
+            }
         }
-
         return G;
     }
 
