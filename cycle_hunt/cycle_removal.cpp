@@ -49,15 +49,22 @@ int main(int argc, char* argv[]) {
 
         if (file_exists(path)) {
             auto G = Graph::load_connection_matrix(path);
-            std::cout << "loaded graph with size " << G.size() << std::endl;
-
+            std::cout << "loaded graph with " << G.size() << " nodes" << std::endl;
+            auto nroots = G.get_roots().size();
+            if (nroots != 1) {
+                std::cout << "Error: graph should only have 1 root, but found "
+                          << nroots << "." << std::endl;
+                return 1;
+            }
             // iterate through nodes, ensuring their
             // predecessors were visited beforehand. Stop
             // when no new node can be visited due to
             // inactive predecessors. Record those blocking
             // nodes:
             auto bnodes = G.reach_blocking_nodes();
-            std::cout << "bnodes.size() = " << bnodes.size() << std::endl;
+            std::cout << bnodes.size()
+                      << " blocking nodes (circular dependencies) found"
+                      << " when building DAG." << std::endl;
             // Construct a graph made from those blocking nodes:
             // that's where the cycles are hiding
             auto blockingG = G.subgraph(bnodes);
@@ -82,7 +89,8 @@ int main(int argc, char* argv[]) {
             // the cycle-removed subgraph.
             G.update_subgraph(unblockedG);
 
-            std::cout << "G.number_of_edges() = " << G.number_of_edges() << std::endl;
+            std::cout << "after cycle removal, graph has "
+                      << G.number_of_edges() << " edges." << std::endl;
 
             if (!save_location.empty()) {
                 // The graph can now be saved in the same binary format as before

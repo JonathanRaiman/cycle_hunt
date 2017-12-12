@@ -81,7 +81,6 @@ std::ostream& operator<<(std::ostream& os, const std::tuple<A, B>& v) {
         return os << ")";
 }
 
-
 template<typename T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
         if (v.size() == 0) return os << "[]";
@@ -95,6 +94,12 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
         return os << "]";
 }
 
+template<typename T>
+struct Array {
+    T* data;
+    Array(size_t size) : data(new T[size]) {}
+    ~Array() {delete [] data;}
+};
 
 std::vector<std::tuple<int, int>> cycle_edges(const std::vector<int>& cycle) {
     std::vector<std::tuple<int, int>> out;
@@ -331,13 +336,13 @@ namespace cycle_hunt {
                 }
 
                 cycles = std::move(out_cycles);
-                std::cout << cycles.size() << " cycles left (" << in_cycle << " removed)" << std::endl;
+                std::cout << cycles.size() << " cycles left (" << in_cycle
+                          << " edges removed, " << blacklist.size()
+                          << " protected edges)" << std::endl;
             } else {
                 blacklist.insert(edge);
             }
-
         }
-
         return res;
     }
 
@@ -353,7 +358,7 @@ namespace cycle_hunt {
         std::unordered_set<node_t> activated;
 
         while (!to_process.empty()) {
-            std::cout << to_process.size() << std::endl;
+            std::cout << to_process.size() << " DAG leaves" << std::endl;
 
             decltype(to_process) new_candidates;
             size_t num_postponed = 0;
@@ -388,14 +393,16 @@ namespace cycle_hunt {
 
             to_process = std::move(new_candidates);
             if (num_postponed == queue_size) {
-                std::cout << "Extending processing queue" << std::endl;
+                std::cout << "Extending DAG processing queue." << std::endl;
                 // stuck condition
                 for (auto& kv : connections) {
                     if (!is_in(kv.first, activated)) {
                         to_process.insert(kv.first);
                     }
                 }
-                std::cout << queue_size << " => " << to_process.size() << std::endl;
+                std::cout << to_process.size()
+                          << " DAG leaves found after expanding the remaining "
+                          << queue_size << " queued leaves." << std::endl;
                 break;
             }
         }
@@ -666,21 +673,22 @@ namespace cycle_hunt {
         return result;
     }
 
-
     Graph Graph::load_connection_matrix(const std::string& fname) {
         std::ifstream fp(fname, std::ios::in | std::ios::binary);
-        int32_t from, to;
-
-        Graph G;
+        fp.seekg(0, std::ios::end);
+        auto length = fp.tellg();
+        size_t num_nodes = length / sizeof(int32_t);
+        fp.seekg(0, std::ios::beg);
+        Array<int32_t> matrix_data(num_nodes);
+        fp.read((char*)matrix_data.data, length);
 
         std::unordered_set<std::tuple<int32_t, int32_t>> visited;
-
-        while (fp) {
-            fp.read((char*)&from, sizeof(from));
-            fp.read((char*)&to, sizeof(to));
-            auto insertable = std::tuple<int32_t, int32_t>(from, to);
+        Graph G;
+        for (size_t i = 0; i < num_nodes; i+=2) {
+            std::tuple<int32_t, int32_t> insertable(
+                matrix_data.data[i], matrix_data.data[i+1]);
             if (visited.find(insertable) == visited.end()) {
-                G.add_edge(from, to);
+                G.add_edge(matrix_data.data[i], matrix_data.data[i+1]);
                 visited.insert(insertable);
             }
         }
