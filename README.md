@@ -1,11 +1,8 @@
 # Cycle hunt
 
-Collection of utilities and scripts for neutralizing cycles while performing the least amount of damage to the original structure (stealth).
+Collection of utilities and scripts for neutralizing cycles while performing the least amount of changes to the original edge structure:
 
-Currently 2 powerful methods when used in conjunction enact the strongest firepower:
-
-* Conversion of *Directed Cyclic Graph* (DCG) to *Directed Acyclic Graph* (DAG) through merges by keeping tracking of dependencies (`remove_cycles` inside `cycle_utils.py`)
-* Greedy most-cyclic edge deletion (`greedy_remove_cycles` inside `Greedy Graph Simplifier.ipynb` and `cycle_removal.cpp`)
+* Greedy most-cyclic edge deletion (`greedy_remove_cycles` inside `cycle_removal.cpp`)
 
 Currently, the best strategy is as follows:
 
@@ -28,8 +25,6 @@ make -j9
 ```
 
 ## Usage
-
-### Running cycle_removal
 
 To run greedy most-cyclic edge deletion do the following:
 Select some number of cycles you want to search for at each step of the algorithms (say 10000),
