@@ -37,5 +37,5 @@ and whether you want to update the most-cyclic edge count after deleting an edge
 To export, specify an output path as the optional 4th argument:
 
 ```bash
-./cycle_removal graph_out.bin 10000 0 graph_out_cyclecless.bin
+./cycle_removal graph_out.bin 10000 0 graph_out_cycleless.bin
 ```
